@@ -22,6 +22,7 @@ const infoEl        = document.getElementById('info');
 const previewWrap   = document.getElementById('preview-wrap');
 const previewCanvas = document.getElementById('preview');
 const rotateBtns    = document.querySelectorAll('.rotate-btn');
+const zScaleInput   = document.getElementById('z-scale');
 
 // ── File loading ────────────────────────────────────────────────────────────
 
@@ -129,15 +130,18 @@ async function finalize() {
   setProgress(0.95);
   await tick();
 
+  const zScale = parseFloat(zScaleInput.value) || 1;
+  const encodeGrid = zScale === 1 ? displayGrid : applyZScale(displayGrid, currentNodata, zScale);
+
   try {
-    tiffBlob = encodeGeoTIFF(displayWidth, displayHeight, displayGrid, currentNodata);
+    tiffBlob = encodeGeoTIFF(displayWidth, displayHeight, encodeGrid, currentNodata);
   } catch (err) {
     setStatus('Encoding error: ' + err.message);
     return;
   }
 
   setProgress(1);
-  renderPreview(displayGrid, displayWidth, displayHeight, currentNodata);
+  renderPreview(encodeGrid, displayWidth, displayHeight, currentNodata);
   previewWrap.style.display = 'block';
   downloadBtn.style.display = 'inline-block';
   setStatus(`Done — ${displayWidth}×${displayHeight} px, ${fmtBytes(tiffBlob.size)}`);
@@ -193,6 +197,18 @@ function renderPreview(grid, width, height, nodata) {
 
   document.getElementById('legend-min').textContent = fmt(minZ);
   document.getElementById('legend-max').textContent = fmt(maxZ);
+}
+
+// ── Z scaling ────────────────────────────────────────────────────────────────
+
+zScaleInput.addEventListener('change', () => { if (displayGrid) finalize(); });
+
+function applyZScale(grid, nodata, factor) {
+  const out = new Float32Array(grid.length);
+  for (let i = 0; i < grid.length; i++) {
+    out[i] = grid[i] === nodata ? nodata : grid[i] * factor;
+  }
+  return out;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
