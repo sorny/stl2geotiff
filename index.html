@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>STL → GeoTIFF</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      font-size: 14px;
+      background: #f0f2f5;
+      color: #1a1a2e;
+      min-height: 100vh;
+      padding: 24px 16px 48px;
+    }
+
+    h1 {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+    }
+    h1 span { color: #4a6cf7; }
+
+    .subtitle {
+      color: #666;
+      margin-top: 4px;
+      font-size: 13px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.04);
+      padding: 24px;
+      margin-top: 20px;
+    }
+
+    /* Drop zone */
+    #drop-zone {
+      border: 2px dashed #c0c8e8;
+      border-radius: 10px;
+      padding: 40px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .2s, background .2s;
+      background: #f8f9ff;
+    }
+    #drop-zone:hover, #drop-zone.drag-over {
+      border-color: #4a6cf7;
+      background: #eef1ff;
+    }
+    #drop-zone .icon { font-size: 36px; margin-bottom: 10px; }
+    #drop-zone p { color: #555; line-height: 1.5; }
+    #drop-zone strong { color: #4a6cf7; }
+    #file-input { display: none; }
+
+    /* Info panel */
+    #info {
+      margin-top: 14px;
+      font-size: 13px;
+      color: #444;
+      line-height: 1.7;
+      min-height: 20px;
+    }
+    #info strong { color: #222; }
+
+    /* Controls row */
+    .controls {
+      display: flex;
+      gap: 16px;
+      align-items: flex-end;
+      flex-wrap: wrap;
+      margin-top: 20px;
+    }
+    .field { display: flex; flex-direction: column; gap: 5px; }
+    label { font-size: 12px; font-weight: 600; color: #555; text-transform: uppercase; letter-spacing: .4px; }
+    select, input[type="number"] {
+      padding: 7px 10px;
+      border: 1.5px solid #d0d5e8;
+      border-radius: 7px;
+      font-size: 14px;
+      outline: none;
+      background: #fff;
+      color: #1a1a2e;
+      transition: border-color .2s;
+      width: 140px;
+    }
+    select:focus, input[type="number"]:focus { border-color: #4a6cf7; }
+
+    /* Buttons */
+    .btn {
+      padding: 9px 20px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity .15s, transform .1s;
+    }
+    .btn:active { transform: scale(.97); }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+    .btn-primary { background: #4a6cf7; color: #fff; }
+    .btn-primary:not(:disabled):hover { background: #3a5ce5; }
+    .btn-success { background: #22c55e; color: #fff; display: none; }
+    .btn-success:not(:disabled):hover { background: #16a34a; }
+
+    /* Progress */
+    #progress-wrap {
+      display: none;
+      margin-top: 18px;
+    }
+    .progress-track {
+      background: #e8eaf0;
+      border-radius: 6px;
+      height: 10px;
+      overflow: hidden;
+      position: relative;
+    }
+    #progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #4a6cf7, #7c3aed);
+      border-radius: 6px;
+      width: 0%;
+      transition: width .15s;
+    }
+    #progress-label {
+      font-size: 12px;
+      color: #666;
+      margin-top: 5px;
+      text-align: right;
+    }
+
+    /* Status */
+    #status {
+      margin-top: 12px;
+      font-size: 13px;
+      color: #555;
+      min-height: 18px;
+    }
+
+    /* Preview */
+    #preview-wrap {
+      display: none;
+      margin-top: 20px;
+    }
+    #preview-wrap h3 {
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .4px;
+      color: #555;
+      margin-bottom: 10px;
+    }
+    .preview-container {
+      position: relative;
+      display: inline-block;
+      max-width: 100%;
+    }
+    #preview {
+      display: block;
+      max-width: 100%;
+      max-height: 480px;
+      width: auto;
+      height: auto;
+      border-radius: 8px;
+      image-rendering: pixelated;
+      border: 1px solid #e0e4f0;
+    }
+    .legend {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: #666;
+      margin-top: 6px;
+      max-width: 480px;
+    }
+    .legend-swatch {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .swatch {
+      width: 14px; height: 14px;
+      border-radius: 3px;
+      border: 1px solid #ccc;
+    }
+
+    /* Rotation controls */
+    .rotate-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-top: 14px;
+      flex-wrap: wrap;
+    }
+    .rotate-row span {
+      font-size: 12px;
+      font-weight: 600;
+      color: #555;
+      text-transform: uppercase;
+      letter-spacing: .4px;
+      margin-right: 4px;
+    }
+    .btn-rotate {
+      padding: 7px 14px;
+      background: #f1f3fb;
+      border: 1.5px solid #d0d5e8;
+      border-radius: 7px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      color: #1a1a2e;
+      transition: background .15s, border-color .15s;
+    }
+    .btn-rotate:hover { background: #e4e8f8; border-color: #4a6cf7; }
+
+    /* Footer */
+    .footer {
+      text-align: center;
+      font-size: 12px;
+      color: #aaa;
+      margin-top: 32px;
+    }
+    .footer a { color: #4a6cf7; text-decoration: none; }
+  </style>
+</head>
+<body>
+
+  <h1>STL <span>→</span> GeoTIFF</h1>
+  <p class="subtitle">Browser-based heightmap converter — no upload, no server, no dependencies.</p>
+
+  <div class="card">
+    <div id="drop-zone">
+      <div class="icon">📂</div>
+      <p>Drop an <strong>.stl</strong> file here or <strong>click to browse</strong></p>
+      <p style="font-size:12px;margin-top:6px;color:#999;">Binary and ASCII STL supported</p>
+    </div>
+    <input type="file" id="file-input" accept=".stl">
+
+    <div id="info"></div>
+
+    <div class="controls">
+      <div class="field">
+        <label for="resolution">Output resolution</label>
+        <select id="resolution">
+          <option value="256">256 × 256</option>
+          <option value="512">512 × 512</option>
+          <option value="1024" selected>1024 × 1024</option>
+          <option value="2048">2048 × 2048</option>
+          <option value="4096">4096 × 4096</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="nodata">NoData value</label>
+        <input type="number" id="nodata" value="-9999" step="any">
+      </div>
+      <button id="convert-btn" class="btn btn-primary" disabled>Convert</button>
+      <button id="download-btn" class="btn btn-success">⬇ Download .tif</button>
+    </div>
+
+    <div id="progress-wrap">
+      <div class="progress-track"><div id="progress-bar"></div></div>
+      <div id="progress-label">0%</div>
+    </div>
+
+    <div id="status"></div>
+
+    <div id="preview-wrap">
+      <h3>Heightmap Preview</h3>
+      <div class="rotate-row">
+        <span>Rotate:</span>
+        <button class="btn-rotate rotate-btn" data-deg="0">0°</button>
+        <button class="btn-rotate rotate-btn" data-deg="90">↻ 90°</button>
+        <button class="btn-rotate rotate-btn" data-deg="180">↻ 180°</button>
+        <button class="btn-rotate rotate-btn" data-deg="270">↺ 90°</button>
+      </div>
+      <div class="preview-container" style="margin-top:12px">
+        <canvas id="preview"></canvas>
+      </div>
+      <div class="legend">
+        <span class="legend-swatch">
+          <span class="swatch" style="background:#000"></span>
+          Min Z: <span id="legend-min">—</span>
+        </span>
+        <span class="legend-swatch">
+          <span class="swatch" style="background:#ff00cc;border-color:#ff00cc"></span>
+          NoData
+        </span>
+        <span class="legend-swatch">
+          <span class="swatch" style="background:#fff"></span>
+          Max Z: <span id="legend-max">—</span>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <p class="footer">
+    Output: Float32 GeoTIFF, pixel-space coordinates, single band.<br>
+    Verify with <code>gdalinfo heightmap.tif</code> or open in QGIS.
+  </p>
+
+  <script src="stl-parser.js"></script>
+  <script src="rasterizer.js"></script>
+  <script src="tiff-writer.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
