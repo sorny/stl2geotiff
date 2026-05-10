@@ -201,7 +201,7 @@ function renderPreview(grid, width, height, nodata) {
 
 // ── Z scaling ────────────────────────────────────────────────────────────────
 
-zScaleInput.addEventListener('change', () => { if (displayGrid) finalize(); });
+zScaleInput.addEventListener('input', () => { if (displayGrid) finalize(); });
 
 function applyZScale(grid, nodata, factor) {
   const out = new Float32Array(grid.length);
