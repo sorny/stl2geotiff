@@ -6,7 +6,7 @@ Developed as a companion tool for [erzberg](https://github.com/sorny/erzberg).
 
 ## Live Demo
 
-Deployed via GitHub Pages: `https://<your-username>.github.io/stl2geotiff`
+https://sorny.github.io/stl2geotiff/
 
 ## Features
 
