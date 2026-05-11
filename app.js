@@ -7,6 +7,7 @@ let rasterWidth    = 0;      // dimensions of heightGrid (pre-rotation)
 let rasterHeight   = 0;
 let tiffBlob       = null;
 let converting     = false;
+let zSliderStep    = 0.001;
 let currentNodata  = -9999;
 let exportFilename = 'heightmap.tif';
 
@@ -105,6 +106,8 @@ convertBtn.addEventListener('click', async () => {
 
   // Remap vertices for the selected orientation
   const orientation = document.getElementById('orientation').value;
+  initZSliders(parsedSTL.bounds, orientation);
+
   const { triangles: mappedTris, bounds: mappedBounds } = remapOrientation(
     parsedSTL.triangles, parsedSTL.bounds, orientation
   );
@@ -169,11 +172,14 @@ async function finalize() {
   setProgress(0.95);
   await tick();
 
-  const zScale = parseFloat(zScaleInput.value) || 1;
-  const zMin   = parseFloat(zMinInput.value);
-  const zMax   = parseFloat(zMaxInput.value);
+  const zScale   = parseFloat(zScaleInput.value) || 1;
+  const zMin     = parseFloat(zMinInput.value);
+  const zMax     = parseFloat(zMaxInput.value);
+  const fullMin  = parseFloat(zMinInput.min);
+  const fullMax  = parseFloat(zMaxInput.max);
+  const atFullRange = zMin <= fullMin && zMax >= fullMax;
 
-  let encodeGrid = (!isNaN(zMin) && !isNaN(zMax))
+  let encodeGrid = (!atFullRange && !isNaN(zMin) && !isNaN(zMax))
     ? applyZClip(displayGrid, currentNodata, zMin, zMax)
     : displayGrid;
   if (zScale !== 1) encodeGrid = applyZScale(encodeGrid, currentNodata, zScale);
@@ -249,11 +255,13 @@ function renderPreview(grid, width, height, nodata) {
 function remapOrientation(triangles, bounds, orientation) {
   if (orientation === 'top') return { triangles, bounds };
 
+  const { minX, maxX, minY, maxY, minZ, maxZ } = bounds;
   const remaps = {
-    front: { fn: v => ({ x:  v.x, y: v.z, z: v.y }), mb: { minX: bounds.minX,  maxX: bounds.maxX,  minY: bounds.minZ, maxY: bounds.maxZ, minZ: bounds.minY, maxZ: bounds.maxY } },
-    back:  { fn: v => ({ x: -v.x, y: v.z, z: v.y }), mb: { minX: -bounds.maxX, maxX: -bounds.minX, minY: bounds.minZ, maxY: bounds.maxZ, minZ: bounds.minY, maxZ: bounds.maxY } },
-    right: { fn: v => ({ x:  v.y, y: v.z, z: v.x }), mb: { minX: bounds.minY,  maxX: bounds.maxY,  minY: bounds.minZ, maxY: bounds.maxZ, minZ: bounds.minX, maxZ: bounds.maxX } },
-    left:  { fn: v => ({ x: -v.y, y: v.z, z: v.x }), mb: { minX: -bounds.maxY, maxX: -bounds.minY, minY: bounds.minZ, maxY: bounds.maxZ, minZ: bounds.minX, maxZ: bounds.maxX } },
+    front:  { fn: v => ({ x:  v.x, y: v.z, z: maxY - v.y }),         mb: { minX,         maxX,         minY: minZ, maxY: maxZ, minZ: 0, maxZ: maxY - minY } },
+    back:   { fn: v => ({ x: -v.x, y: v.z, z: v.y - minY }),         mb: { minX: -maxX,  maxX: -minX,  minY: minZ, maxY: maxZ, minZ: 0, maxZ: maxY - minY } },
+    right:  { fn: v => ({ x:  v.y, y: v.z, z: v.x - minX }),         mb: { minX: minY,   maxX: maxY,   minY: minZ, maxY: maxZ, minZ: 0, maxZ: maxX - minX } },
+    left:   { fn: v => ({ x: -v.y, y: v.z, z: maxX - v.x }),         mb: { minX: -maxY,  maxX: -minY,  minY: minZ, maxY: maxZ, minZ: 0, maxZ: maxX - minX } },
+    bottom: { fn: v => ({ x: -v.x, y: v.y, z: maxZ - v.z }),         mb: { minX: -maxX,  maxX: -minX,  minY,       maxY,       minZ: 0, maxZ: maxZ - minZ } },
   };
 
   const { fn: remapV, mb } = remaps[orientation];
@@ -267,16 +275,17 @@ function remapOrientation(triangles, bounds, orientation) {
 // ── Z range clip ─────────────────────────────────────────────────────────────
 
 function heightRangeFor(bounds, orientation) {
-  if (orientation === 'front' || orientation === 'back')  return { min: bounds.minY, max: bounds.maxY };
-  if (orientation === 'right' || orientation === 'left')  return { min: bounds.minX, max: bounds.maxX };
+  if (orientation === 'front' || orientation === 'back')  return { min: 0, max: bounds.maxY - bounds.minY };
+  if (orientation === 'right' || orientation === 'left')  return { min: 0, max: bounds.maxX - bounds.minX };
+  if (orientation === 'bottom') return { min: 0, max: bounds.maxZ - bounds.minZ };
   return { min: bounds.minZ, max: bounds.maxZ };
 }
 
 function initZSliders(bounds, orientation) {
   const { min, max } = heightRangeFor(bounds, orientation);
-  const step = (max - min) / 500 || 0.001;
-  zMinInput.min = min; zMinInput.max = max; zMinInput.step = step; zMinInput.value = min;
-  zMaxInput.min = min; zMaxInput.max = max; zMaxInput.step = step; zMaxInput.value = max;
+  zSliderStep = (max - min) / 500 || 0.001;
+  zMinInput.min = min; zMinInput.max = max; zMinInput.step = 'any'; zMinInput.value = min;
+  zMaxInput.min = min; zMaxInput.max = max; zMaxInput.step = 'any'; zMaxInput.value = max;
   zMinVal.textContent = fmt(min);
   zMaxVal.textContent = fmt(max);
   updateZRangeFill();
@@ -295,27 +304,30 @@ function updateZRangeFill() {
 }
 
 function applyZClip(grid, nodata, minZ, maxZ) {
+  // Convert bounds to float32 to match grid storage precision and avoid
+  // false clipping at the boundary due to float64 vs float32 mismatch.
+  const f32 = new Float32Array(2);
+  f32[0] = minZ; f32[1] = maxZ;
+  const lo = f32[0], hi = f32[1];
   const out = new Float32Array(grid.length);
   for (let i = 0; i < grid.length; i++) {
     const v = grid[i];
-    out[i] = (v === nodata || v < minZ || v > maxZ) ? nodata : v;
+    out[i] = (v === nodata || v < lo || v > hi) ? nodata : v;
   }
   return out;
 }
 
 zMinInput.addEventListener('input', () => {
-  const step = parseFloat(zMinInput.step);
-  if (parseFloat(zMinInput.value) >= parseFloat(zMaxInput.value) - step)
-    zMinInput.value = parseFloat(zMaxInput.value) - step;
+  if (parseFloat(zMinInput.value) > parseFloat(zMaxInput.value) - zSliderStep)
+    zMinInput.value = parseFloat(zMaxInput.value) - zSliderStep;
   zMinVal.textContent = fmt(parseFloat(zMinInput.value));
   updateZRangeFill();
   if (displayGrid) finalize();
 });
 
 zMaxInput.addEventListener('input', () => {
-  const step = parseFloat(zMaxInput.step);
-  if (parseFloat(zMaxInput.value) <= parseFloat(zMinInput.value) + step)
-    zMaxInput.value = parseFloat(zMinInput.value) + step;
+  if (parseFloat(zMaxInput.value) < parseFloat(zMinInput.value) + zSliderStep)
+    zMaxInput.value = parseFloat(zMinInput.value) + zSliderStep;
   zMaxVal.textContent = fmt(parseFloat(zMaxInput.value));
   updateZRangeFill();
   if (displayGrid) finalize();

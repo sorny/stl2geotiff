@@ -15,7 +15,7 @@ https://sorny.github.io/stl2geotiff/
 - Aspect ratio preserved — output dimensions match the STL's XY proportions
 - NoData masking for pixels outside the mesh
 - Configurable max output dimension (256 – 4096 px, longest side)
-- Orientation selector: Top (XY plane), Front (XZ plane), Side (YZ plane)
+- Orientation selector: Top, Bottom, Front, Back, Right Side, Left Side
 - Z range clip — dual-handle slider to restrict the height range; values outside become NoData
 - Z multiplier to scale height values before export (e.g. mm → cm, mm → m)
 - Post-conversion rotation (0°, 90°, 180°, 270°)
@@ -55,12 +55,13 @@ python3 -m http.server
 
 ## Technical notes
 
-- STL is rasterized by projecting triangles onto the selected plane (XY/XZ/YZ); non-Top orientations remap vertex coordinates before rasterization
+- STL is rasterized by projecting triangles onto the selected plane; non-Top orientations remap vertex coordinates before rasterization so the rasterizer always sees the projection plane as XY and the depth value as Z
+- All orientations normalise height values to `[0, dimension_range]` so the closest visible surface always has the highest value; Top retains absolute Z coordinates
 - Output dimensions are computed from the STL's projected bounds to preserve aspect ratio; the selected resolution is the longest side
 - Z interpolation uses barycentric coordinates; containment uses edge functions
 - Triangles are indexed into a spatial bucket grid for performance
 - For overlapping surfaces the maximum Z is taken (topmost surface wins)
-- Z range clipping sets out-of-range pixels to NoData; applied before Z scaling
+- Z range clipping sets out-of-range pixels to NoData; applied before Z scaling; skipped when sliders are at full range to avoid float32 boundary precision issues
 - GeoTIFF is hand-encoded (no external libraries) with correct `ModelPixelScaleTag`, `ModelTiepointTag`, `GeoKeyDirectoryTag`, and `GDAL_NODATA` tags
 
 ## License
