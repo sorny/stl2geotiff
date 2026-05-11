@@ -249,17 +249,17 @@ function renderPreview(grid, width, height, nodata) {
 function remapOrientation(triangles, bounds, orientation) {
   if (orientation === 'top') return { triangles, bounds };
 
-  const remapV = orientation === 'front'
-    ? v => ({ x: v.x, y: v.z, z: v.y })   // look along -Y: width=X, rows=Z, height=Y
-    : v => ({ x: v.y, y: v.z, z: v.x });   // look along -X: width=Y, rows=Z, height=X
+  const remaps = {
+    front: { fn: v => ({ x:  v.x, y: v.z, z: v.y }), mb: { minX: bounds.minX,  maxX: bounds.maxX,  minY: bounds.minZ, maxY: bounds.maxZ, minZ: bounds.minY, maxZ: bounds.maxY } },
+    back:  { fn: v => ({ x: -v.x, y: v.z, z: v.y }), mb: { minX: -bounds.maxX, maxX: -bounds.minX, minY: bounds.minZ, maxY: bounds.maxZ, minZ: bounds.minY, maxZ: bounds.maxY } },
+    right: { fn: v => ({ x:  v.y, y: v.z, z: v.x }), mb: { minX: bounds.minY,  maxX: bounds.maxY,  minY: bounds.minZ, maxY: bounds.maxZ, minZ: bounds.minX, maxZ: bounds.maxX } },
+    left:  { fn: v => ({ x: -v.y, y: v.z, z: v.x }), mb: { minX: -bounds.maxY, maxX: -bounds.minY, minY: bounds.minZ, maxY: bounds.maxZ, minZ: bounds.minX, maxZ: bounds.maxX } },
+  };
 
+  const { fn: remapV, mb } = remaps[orientation];
   const mapped = triangles.map(({ v1, v2, v3 }) => ({
     v1: remapV(v1), v2: remapV(v2), v3: remapV(v3)
   }));
-
-  const mb = orientation === 'front'
-    ? { minX: bounds.minX, maxX: bounds.maxX, minY: bounds.minZ, maxY: bounds.maxZ, minZ: bounds.minY, maxZ: bounds.maxY }
-    : { minX: bounds.minY, maxX: bounds.maxY, minY: bounds.minZ, maxY: bounds.maxZ, minZ: bounds.minX, maxZ: bounds.maxX };
 
   return { triangles: mapped, bounds: mb };
 }
@@ -267,8 +267,8 @@ function remapOrientation(triangles, bounds, orientation) {
 // ── Z range clip ─────────────────────────────────────────────────────────────
 
 function heightRangeFor(bounds, orientation) {
-  if (orientation === 'front') return { min: bounds.minY, max: bounds.maxY };
-  if (orientation === 'side')  return { min: bounds.minX, max: bounds.maxX };
+  if (orientation === 'front' || orientation === 'back')  return { min: bounds.minY, max: bounds.maxY };
+  if (orientation === 'right' || orientation === 'left')  return { min: bounds.minX, max: bounds.maxX };
   return { min: bounds.minZ, max: bounds.maxZ };
 }
 
