@@ -14,6 +14,7 @@ https://sorny.github.io/stl2geotiff/
 - Rasterizes to a Float32 GeoTIFF with accurate Z values preserved
 - NoData masking for pixels outside the mesh
 - Configurable output resolution (256 – 4096 px)
+- Z multiplier to scale height values before export (e.g. mm → cm, mm → m)
 - Post-conversion rotation (0°, 90°, 180°, 270°)
 - Grayscale heightmap preview with magenta NoData highlight
 - Output filename derived from the input STL filename
@@ -33,7 +34,7 @@ python3 -m http.server
 ```
 
 1. Drop an `.stl` file onto the drop zone or click to browse
-2. Choose output resolution and NoData value
+2. Choose output resolution, NoData value, and Z multiplier
 3. Click **Convert**
 4. Optionally rotate the result
 5. Click **Download .tif**
