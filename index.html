@@ -13,7 +13,7 @@
       background: #f0f2f5;
       color: #1a1a2e;
       min-height: 100vh;
-      padding: 24px 16px 48px;
+      padding: 24px 16px 24px;
     }
 
     h1 {
@@ -54,6 +54,16 @@
     #drop-zone .icon { font-size: 36px; margin-bottom: 10px; }
     #drop-zone p { color: #555; line-height: 1.5; }
     #drop-zone strong { color: #4a6cf7; }
+    #drop-zone.compact {
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      text-align: left;
+    }
+    #drop-zone.compact .drop-icon { font-size: 16px; }
+    #drop-zone.compact .drop-name { font-size: 13px; color: #333; font-weight: 500; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #drop-zone.compact .drop-hint { font-size: 11px; color: #999; white-space: nowrap; }
     #file-input { display: none; }
 
     /* Info panel */
@@ -216,6 +226,82 @@
     }
     .btn-rotate:hover { background: #e4e8f8; border-color: #4a6cf7; }
 
+    /* Z range dual-handle slider */
+    #zrange-wrap {
+      display: none;
+      margin-top: 18px;
+      padding-top: 16px;
+      border-top: 1px solid #eef0f8;
+    }
+    .zrange-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .zrange-vals {
+      font-size: 12px;
+      color: #444;
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+    }
+    .dual-range {
+      position: relative;
+      height: 20px;
+      display: flex;
+      align-items: center;
+    }
+    .dual-range-track {
+      position: absolute;
+      left: 0; right: 0;
+      height: 6px;
+      background: #e8eaf0;
+      border-radius: 3px;
+    }
+    .dual-range-fill {
+      position: absolute;
+      height: 100%;
+      background: #4a6cf7;
+      border-radius: 3px;
+    }
+    .dual-range input[type="range"] {
+      position: absolute;
+      width: 100%;
+      margin: 0;
+      -webkit-appearance: none;
+      appearance: none;
+      background: transparent;
+      pointer-events: none;
+      height: 20px;
+    }
+    .dual-range input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #4a6cf7;
+      border: 2px solid #fff;
+      box-shadow: 0 1px 4px rgba(74,108,247,.35);
+      pointer-events: all;
+      cursor: pointer;
+      transition: box-shadow .15s;
+    }
+    .dual-range input[type="range"]::-moz-range-thumb {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #4a6cf7;
+      border: 2px solid #fff;
+      box-shadow: 0 1px 4px rgba(74,108,247,.35);
+      pointer-events: all;
+      cursor: pointer;
+    }
+    .dual-range input[type="range"]::-webkit-slider-thumb:hover,
+    .dual-range input[type="range"]:active::-webkit-slider-thumb {
+      box-shadow: 0 0 0 5px rgba(74,108,247,.18);
+    }
+
     /* Footer */
     .footer {
       text-align: center;
@@ -270,6 +356,20 @@
       </div>
       <button id="convert-btn" class="btn btn-primary" disabled>Convert</button>
       <button id="download-btn" class="btn btn-success">⬇ Download .tif</button>
+    </div>
+
+    <div id="zrange-wrap">
+      <div class="zrange-header">
+        <label>Z range</label>
+        <span class="zrange-vals"><span id="z-min-val">—</span> → <span id="z-max-val">—</span></span>
+      </div>
+      <div class="dual-range">
+        <div class="dual-range-track">
+          <div class="dual-range-fill" id="zrange-fill"></div>
+        </div>
+        <input type="range" id="z-min">
+        <input type="range" id="z-max">
+      </div>
     </div>
 
     <div id="progress-wrap">

@@ -25,6 +25,12 @@ const previewWrap   = document.getElementById('preview-wrap');
 const previewCanvas = document.getElementById('preview');
 const rotateBtns    = document.querySelectorAll('.rotate-btn');
 const zScaleInput   = document.getElementById('z-scale');
+const zrangeWrap    = document.getElementById('zrange-wrap');
+const zMinInput     = document.getElementById('z-min');
+const zMaxInput     = document.getElementById('z-max');
+const zMinVal       = document.getElementById('z-min-val');
+const zMaxVal       = document.getElementById('z-max-val');
+const zrangeFill    = document.getElementById('zrange-fill');
 
 // ── File loading ────────────────────────────────────────────────────────────
 
@@ -58,13 +64,23 @@ async function loadFile(file) {
   const { triangles, bounds } = parsedSTL;
   const { minX, maxX, minY, maxY, minZ, maxZ } = bounds;
   infoEl.innerHTML =
-    `<strong>${escapeHtml(file.name)}</strong><br>` +
-    `Triangles: ${triangles.length.toLocaleString()}<br>` +
-    `X: ${fmt(minX)} → ${fmt(maxX)}<br>` +
-    `Y: ${fmt(minY)} → ${fmt(maxY)}<br>` +
-    `Z: ${fmt(minZ)} → ${fmt(maxZ)}`;
+    `Triangles: ${triangles.length.toLocaleString()} &nbsp;·&nbsp; ` +
+    `X: ${fmt(minX)}→${fmt(maxX)} &nbsp;·&nbsp; ` +
+    `Y: ${fmt(minY)}→${fmt(maxY)} &nbsp;·&nbsp; ` +
+    `Z: ${fmt(minZ)}→${fmt(maxZ)}`;
+
+  dropZone.classList.add('compact');
+  dropZone.innerHTML =
+    `<span class="drop-icon">📄</span>` +
+    `<span class="drop-name">${escapeHtml(file.name)}</span>` +
+    `<span class="drop-hint">Drop or click to replace</span>`;
 
   exportFilename = file.name.replace(/\.[^.]+$/, '') + '.tif';
+
+  const orientation = document.getElementById('orientation').value;
+  initZSliders(parsedSTL.bounds, orientation);
+  zrangeWrap.style.display = 'block';
+
   convertBtn.disabled = false;
   setStatus('File loaded. Click Convert to generate the GeoTIFF.');
 }
@@ -154,7 +170,13 @@ async function finalize() {
   await tick();
 
   const zScale = parseFloat(zScaleInput.value) || 1;
-  const encodeGrid = zScale === 1 ? displayGrid : applyZScale(displayGrid, currentNodata, zScale);
+  const zMin   = parseFloat(zMinInput.value);
+  const zMax   = parseFloat(zMaxInput.value);
+
+  let encodeGrid = (!isNaN(zMin) && !isNaN(zMax))
+    ? applyZClip(displayGrid, currentNodata, zMin, zMax)
+    : displayGrid;
+  if (zScale !== 1) encodeGrid = applyZScale(encodeGrid, currentNodata, zScale);
 
   try {
     tiffBlob = encodeGeoTIFF(displayWidth, displayHeight, encodeGrid, currentNodata);
@@ -241,6 +263,67 @@ function remapOrientation(triangles, bounds, orientation) {
 
   return { triangles: mapped, bounds: mb };
 }
+
+// ── Z range clip ─────────────────────────────────────────────────────────────
+
+function heightRangeFor(bounds, orientation) {
+  if (orientation === 'front') return { min: bounds.minY, max: bounds.maxY };
+  if (orientation === 'side')  return { min: bounds.minX, max: bounds.maxX };
+  return { min: bounds.minZ, max: bounds.maxZ };
+}
+
+function initZSliders(bounds, orientation) {
+  const { min, max } = heightRangeFor(bounds, orientation);
+  const step = (max - min) / 500 || 0.001;
+  zMinInput.min = min; zMinInput.max = max; zMinInput.step = step; zMinInput.value = min;
+  zMaxInput.min = min; zMaxInput.max = max; zMaxInput.step = step; zMaxInput.value = max;
+  zMinVal.textContent = fmt(min);
+  zMaxVal.textContent = fmt(max);
+  updateZRangeFill();
+}
+
+function updateZRangeFill() {
+  const min = parseFloat(zMinInput.min);
+  const max = parseFloat(zMinInput.max);
+  const lo  = (parseFloat(zMinInput.value) - min) / (max - min) * 100;
+  const hi  = (parseFloat(zMaxInput.value) - min) / (max - min) * 100;
+  zrangeFill.style.left  = lo + '%';
+  zrangeFill.style.width = (hi - lo) + '%';
+  // When both handles are pushed to the right, bring min to front so it stays draggable
+  zMinInput.style.zIndex = lo > 50 ? 3 : 1;
+  zMaxInput.style.zIndex = lo > 50 ? 1 : 3;
+}
+
+function applyZClip(grid, nodata, minZ, maxZ) {
+  const out = new Float32Array(grid.length);
+  for (let i = 0; i < grid.length; i++) {
+    const v = grid[i];
+    out[i] = (v === nodata || v < minZ || v > maxZ) ? nodata : v;
+  }
+  return out;
+}
+
+zMinInput.addEventListener('input', () => {
+  const step = parseFloat(zMinInput.step);
+  if (parseFloat(zMinInput.value) >= parseFloat(zMaxInput.value) - step)
+    zMinInput.value = parseFloat(zMaxInput.value) - step;
+  zMinVal.textContent = fmt(parseFloat(zMinInput.value));
+  updateZRangeFill();
+  if (displayGrid) finalize();
+});
+
+zMaxInput.addEventListener('input', () => {
+  const step = parseFloat(zMaxInput.step);
+  if (parseFloat(zMaxInput.value) <= parseFloat(zMinInput.value) + step)
+    zMaxInput.value = parseFloat(zMinInput.value) + step;
+  zMaxVal.textContent = fmt(parseFloat(zMaxInput.value));
+  updateZRangeFill();
+  if (displayGrid) finalize();
+});
+
+document.getElementById('orientation').addEventListener('change', () => {
+  if (parsedSTL) initZSliders(parsedSTL.bounds, document.getElementById('orientation').value);
+});
 
 // ── Z scaling ────────────────────────────────────────────────────────────────
 
