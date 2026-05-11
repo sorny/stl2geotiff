@@ -3,6 +3,8 @@ let heightGrid     = null;   // raw rasterized grid (never mutated)
 let displayGrid    = null;   // rotated/current grid
 let displayWidth   = 0;
 let displayHeight  = 0;
+let rasterWidth    = 0;      // dimensions of heightGrid (pre-rotation)
+let rasterHeight   = 0;
 let tiffBlob       = null;
 let converting     = false;
 let currentNodata  = -9999;
@@ -77,7 +79,7 @@ convertBtn.addEventListener('click', async () => {
   previewWrap.style.display = 'none';
   tiffBlob = null; heightGrid = null; displayGrid = null;
 
-  const size   = parseInt(resolutionSel.value, 10);
+  const maxDim = parseInt(resolutionSel.value, 10);
   const nodata = parseFloat(nodataInput.value);
   if (isNaN(nodata)) {
     setStatus('Invalid nodata value.');
@@ -85,14 +87,33 @@ convertBtn.addEventListener('click', async () => {
   }
   currentNodata = nodata;
 
+  // Remap vertices for the selected orientation
+  const orientation = document.getElementById('orientation').value;
+  const { triangles: mappedTris, bounds: mappedBounds } = remapOrientation(
+    parsedSTL.triangles, parsedSTL.bounds, orientation
+  );
+
+  // Preserve STL aspect ratio; selected resolution is the longest side
+  const meshW  = mappedBounds.maxX - mappedBounds.minX || 1;
+  const meshH  = mappedBounds.maxY - mappedBounds.minY || 1;
+  const aspect = meshW / meshH;
+  let outWidth, outHeight;
+  if (aspect >= 1) {
+    outWidth  = maxDim;
+    outHeight = Math.max(1, Math.round(maxDim / aspect));
+  } else {
+    outHeight = maxDim;
+    outWidth  = Math.max(1, Math.round(maxDim * aspect));
+  }
+
   progressWrap.style.display = 'block';
   setProgress(0);
   setStatus('Rasterizing…');
 
   try {
     heightGrid = await rasterize(
-      parsedSTL.triangles, parsedSTL.bounds,
-      size, size, nodata,
+      mappedTris, mappedBounds,
+      outWidth, outHeight, nodata,
       p => setProgress(p * 0.9)
     );
   } catch (err) {
@@ -100,9 +121,11 @@ convertBtn.addEventListener('click', async () => {
     converting = false; convertBtn.disabled = false; return;
   }
 
+  rasterWidth   = outWidth;
+  rasterHeight  = outHeight;
   displayGrid   = heightGrid;
-  displayWidth  = size;
-  displayHeight = size;
+  displayWidth  = outWidth;
+  displayHeight = outHeight;
 
   finalize();
   converting = false;
@@ -115,7 +138,7 @@ rotateBtns.forEach(btn => {
   btn.addEventListener('click', () => {
     if (!heightGrid) return;
     const deg = parseInt(btn.dataset.deg, 10);
-    const result = rotateGrid(heightGrid, parseInt(resolutionSel.value, 10), deg);
+    const result = rotateGrid(heightGrid, rasterWidth, rasterHeight, deg);
     displayGrid   = result.grid;
     displayWidth  = result.width;
     displayHeight = result.height;
@@ -197,6 +220,26 @@ function renderPreview(grid, width, height, nodata) {
 
   document.getElementById('legend-min').textContent = fmt(minZ);
   document.getElementById('legend-max').textContent = fmt(maxZ);
+}
+
+// ── Orientation remapping ────────────────────────────────────────────────────
+
+function remapOrientation(triangles, bounds, orientation) {
+  if (orientation === 'top') return { triangles, bounds };
+
+  const remapV = orientation === 'front'
+    ? v => ({ x: v.x, y: v.z, z: v.y })   // look along -Y: width=X, rows=Z, height=Y
+    : v => ({ x: v.y, y: v.z, z: v.x });   // look along -X: width=Y, rows=Z, height=X
+
+  const mapped = triangles.map(({ v1, v2, v3 }) => ({
+    v1: remapV(v1), v2: remapV(v2), v3: remapV(v3)
+  }));
+
+  const mb = orientation === 'front'
+    ? { minX: bounds.minX, maxX: bounds.maxX, minY: bounds.minZ, maxY: bounds.maxZ, minZ: bounds.minY, maxZ: bounds.maxY }
+    : { minX: bounds.minY, maxX: bounds.maxY, minY: bounds.minZ, maxY: bounds.maxZ, minZ: bounds.minX, maxZ: bounds.maxX };
+
+  return { triangles: mapped, bounds: mb };
 }
 
 // ── Z scaling ────────────────────────────────────────────────────────────────

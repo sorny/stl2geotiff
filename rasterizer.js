@@ -116,12 +116,12 @@ function rasterize(triangles, bounds, width, height, nodata, onProgress) {
 
 // Rotate a square Float32Array by multiples of 90° clockwise.
 // Returns a new Float32Array (and the new width/height, always equal for square).
-function rotateGrid(grid, size, degrees) {
+function rotateGrid(grid, width, height, degrees) {
   const steps = ((degrees / 90) % 4 + 4) % 4; // 0,1,2,3
-  if (steps === 0) return { grid, width: size, height: size };
+  if (steps === 0) return { grid, width, height };
 
   let src = grid;
-  let w = size, h = size;
+  let w = width, h = height;
 
   for (let s = 0; s < steps; s++) {
     // One step = 90° CW: old(r,c) → new(c, w-1-r), new size = h×w
